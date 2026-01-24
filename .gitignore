@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+
+# Models (too large for git)
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.pt
+models/*.pth
+
+# Logs
+logs/
+*.log
+
+# Databases
+*.db
+*.sqlite
+*.duckdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Windows
+*.exe
+*.dll
+*.sys
+*.pdb
+
+# Kernel drivers
+kernel/**/*.obj
+kernel/**/*.lib
+kernel/**/*.exp
+kernel/**/*.sys
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Environment
+.env
+.env.local
+
+# Memory/Cache
+memory_cache/
+vector_store/
+episodic_memory/
+
+# Temporary
+temp/
+tmp/
+*.tmp
