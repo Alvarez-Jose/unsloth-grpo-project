@@ -13,7 +13,7 @@ Events are analyzed to predict user intent and trigger agent activation.
 import asyncio
 import json
 from datetime import datetime
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Any  # Added 'Any' here
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import threading
@@ -39,6 +39,8 @@ except ImportError:
 from loguru import logger
 
 
+# FIXED: Only ONE SystemEvent class definition - using dataclass
+@dataclass
 class SystemEvent:
     """Represents a captured system event"""
     timestamp: str
@@ -48,7 +50,7 @@ class SystemEvent:
     target: str
     process_name: str
     user: str
-    metadata: Dict[str, any]
+    metadata: Dict[str, Any]
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -79,7 +81,7 @@ class SystemEvent:
 class FileEventHandler(FileSystemEventHandler):
     """Handler for file system events"""
     
-    def __init__(self, event_callback):
+    def __init__(self, event_callback: Callable[[SystemEvent], None]):
         self.event_callback = event_callback
         super().__init__()
     
@@ -95,7 +97,7 @@ class FileEventHandler(FileSystemEventHandler):
         if not event.is_directory:
             self._create_event("delete", event.src_path)
     
-    def _create_event(self, operation, path):
+    def _create_event(self, operation: str, path: str):
         """Create a SystemEvent from file system event"""
         event = SystemEvent(
             timestamp=datetime.now().isoformat(),
@@ -112,51 +114,13 @@ class FileEventHandler(FileSystemEventHandler):
             self.event_callback(event)
 
 
-@dataclass
-class SystemEvent:
-    """Represents a captured system event"""
-    timestamp: str
-    event_type: str  # file, process, registry, network
-    source: str
-    operation: str  # create, read, write, delete, execute
-    target: str
-    process_name: str
-    user: str
-    metadata: Dict[str, any]
-    
-    def to_dict(self) -> dict:
-        return asdict(self)
-    
-    def is_developer_activity(self) -> bool:
-        """Heuristic to detect developer-related activities"""
-        dev_indicators = [
-            'visual studio', 'vscode', 'code.exe', 'devenv.exe',
-            'git.exe', 'python.exe', 'node.exe', 'cargo.exe',
-            '.cpp', '.py', '.js', '.rs', '.go', '.java'
-        ]
-        target_lower = self.target.lower()
-        process_lower = self.process_name.lower()
-        
-        return any(ind in target_lower or ind in process_lower 
-                   for ind in dev_indicators)
-    
-    def is_debugging_session(self) -> bool:
-        """Detect if this looks like a debugging session start"""
-        debug_indicators = [
-            'devenv.exe', 'vshost.exe', 'debug', '.pdb', 
-            'windbg.exe', 'gdb.exe', 'lldb.exe'
-        ]
-        return any(ind in self.process_name.lower() or ind in self.target.lower()
-                   for ind in debug_indicators)
-
-
 class ETWEventMonitor:
     """  
     Captures system events and provides them to the agent system
     for context-aware predictions.
     """
     
-    def __init__(self, event_callback: Optional[Callable] = None):
+    def __init__(self, event_callback: Optional[Callable[[SystemEvent], None]] = None):
         """
         Args:
             event_callback: Function called when interesting events detected
@@ -346,8 +310,10 @@ class ETWEventMonitor:
         return False
 
 
-# Example usage / testing
-if __name__ == "__main__":
+# FIXED: Proper async example usage
+async def example_main():
+    """Example usage with proper async/await"""
+    
     def on_interesting_event(event: SystemEvent):
         """Callback when interesting events detected"""
         print(f"\n Interesting Event Detected!")
@@ -355,7 +321,6 @@ if __name__ == "__main__":
         print(f"   Operation: {event.operation}")
         print(f"   Target: {event.target}")
         print(f"   Process: {event.process_name}")
-
     
     # Create monitor
     monitor = ETWEventMonitor(event_callback=on_interesting_event)
@@ -369,7 +334,7 @@ if __name__ == "__main__":
         
         # Keep running and check for patterns
         while True:
-            asyncio.sleep(5)
+            await asyncio.sleep(5)  # FIXED: Use await
             
             # Example pattern detection
             if monitor.detect_pattern('debugging_session'):
@@ -386,3 +351,8 @@ if __name__ == "__main__":
         print("\n\nStopping monitor...")
         monitor.stop()
         print("Monitor stopped. Goodbye!")
+
+
+# Example usage / testing
+if __name__ == "__main__":
+    asyncio.run(example_main())

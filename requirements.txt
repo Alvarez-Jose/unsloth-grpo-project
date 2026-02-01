@@ -3,17 +3,19 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# ETW and Windows system monitoring
-pywin32==306
-wmi==1.5.1
+# System monitoring
 psutil==5.9.6
+
+# Windows-only system monitoring (skip on Linux/macOS)
+pywin32==306; platform_system == "Windows"
+wmi==1.5.1; platform_system == "Windows"
 
 # LLM inference
 llama-cpp-python==0.2.27
 transformers==4.36.0
-torch==2.1.0
+torch>=2.2.0,<3.0
 accelerate==0.25.0
-bitsandbytes==0.41.3
+bitsandbytes==0.41.3; platform_system == "Linux"
 
 # Memory and storage
 chromadb==0.4.22
@@ -26,10 +28,8 @@ sentence-transformers==2.2.2
 fastapi==0.108.0
 uvicorn==0.25.0
 websockets==12.0
-pydantic==2.5.0
 
-# Async and concurrency
-asyncio==3.4.3
+# Async and files
 aiofiles==23.2.1
 
 # Logging and monitoring
@@ -50,3 +50,4 @@ pandas==2.1.4
 # Configuration
 pyyaml==6.0.1
 toml==0.10.2
+11

@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from loguru import logger
-from etw_monitor import SystemEvent
+from c_core.etw_monitor import SystemEvent
 
 
 @dataclass
@@ -68,7 +68,7 @@ class ExpertAgent(ABC):
         pass
     
     @abstractmethod
-    def can_handle(self, task: str, context: Dict) -> float:
+    def can_handle(self, task: str, context: Dict[str, Any]) -> float:
         """
         Determine if this expert can handle the task
         
@@ -82,7 +82,7 @@ class ExpertAgent(ABC):
         self.execution_count += 1
         self.total_time += execution_time
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get expert statistics"""
         avg_time = self.total_time / self.execution_count if self.execution_count > 0 else 0
         return {
@@ -106,7 +106,7 @@ class DebuggingExpert(ExpertAgent):
         super().__init__("DebuggingExpert", model_path)
         self.crash_patterns = self._load_crash_patterns()
     
-    def _load_crash_patterns(self) -> Dict[str, str]:
+    def _load_crash_patterns(self) -> Dict[str, Dict[str, Any]]:  # FIXED
         """Load common crash patterns and solutions"""
         return {
             'null_pointer': {
@@ -140,7 +140,7 @@ class DebuggingExpert(ExpertAgent):
         """Execute debugging task"""
         start_time = time.time()
         
-        logger.info(f"🔍 Debugging Expert executing: {task[:100]}...")
+        logger.info(f" Debugging Expert executing: {task[:100]}...")
         
         actions_taken = []
         response_parts = []
@@ -150,7 +150,7 @@ class DebuggingExpert(ExpertAgent):
         if debug_events:
             actions_taken.append("Analyzed recent debugging session events")
             response_parts.append(
-                f"📊 Detected {len(debug_events)} debugging-related events."
+                f" Detected {len(debug_events)} debugging-related events."
             )
         
         # 2. Look for crash logs in recent file access
@@ -173,7 +173,7 @@ class DebuggingExpert(ExpertAgent):
         
         if detected_issues:
             actions_taken.append("Matched crash patterns")
-            response_parts.append("\n🎯 Detected Issues:")
+            response_parts.append("\n Detected Issues:")
             for issue_type, suggestion in detected_issues:
                 response_parts.append(f"\n**{issue_type.replace('_', ' ').title()}**")
                 response_parts.append(f"→ {suggestion}")
@@ -187,7 +187,7 @@ class DebuggingExpert(ExpertAgent):
         # 5. Offer to load related files
         if crash_logs:
             log_file = crash_logs[-1].target
-            response_parts.append(f"\n📂 Would you like me to analyze: {log_file}?")
+            response_parts.append(f"\n Would you like me to analyze: {log_file}?")
             actions_taken.append("Offered to analyze crash log")
         
         # Build final response
@@ -209,7 +209,7 @@ class DebuggingExpert(ExpertAgent):
             }
         )
     
-    def can_handle(self, task: str, context: Dict) -> float:
+    def can_handle(self, task: str, context: Dict[str, Any]) -> float:  # FIXED: Added type parameters
         """Determine if this expert can handle debugging tasks"""
         task_lower = task.lower()
         
@@ -251,7 +251,7 @@ class FileOperationsExpert(ExpertAgent):
         """Execute file operation task"""
         start_time = time.time()
         
-        logger.info(f"📁 File Operations Expert executing: {task[:100]}...")
+        logger.info(f" File Operations Expert executing: {task[:100]}...")
         
         actions_taken = []
         response = "File operations expert: Task received"
@@ -271,11 +271,11 @@ class FileOperationsExpert(ExpertAgent):
             actions_taken.append(f"Analyzed {len(file_events)} file events")
             actions_taken.append(f"Found {len(directories)} active directories")
             
-            response = f"📊 File Activity Summary:\n"
+            response = f" File Activity Summary:\n"
             response += f"- {len(file_events)} file operations detected\n"
             response += f"- {len(directories)} directories accessed\n\n"
             
-            response += "📂 Most Active Directories:\n"
+            response += " Most Active Directories:\n"
             for dir_path, files in sorted(directories.items(), 
                                          key=lambda x: len(x[1]), 
                                          reverse=True)[:3]:
@@ -293,7 +293,7 @@ class FileOperationsExpert(ExpertAgent):
             metadata={'file_events_analyzed': len(file_events)}
         )
     
-    def can_handle(self, task: str, context: Dict) -> float:
+    def can_handle(self, task: str, context: Dict[str, Any]) -> float:  # FIXED: Added type parameters
         """Determine if this expert can handle file tasks"""
         task_lower = task.lower()
         
@@ -341,7 +341,7 @@ if __name__ == "__main__":
             )
         ]
         
-        print("🧪 Testing Debugging Expert...\n")
+        print(" Testing Debugging Expert...\n")
         response = await debug_expert.execute(task, {}, events)
         
         print(f"Success: {response.success}")
@@ -353,7 +353,7 @@ if __name__ == "__main__":
             print(f"  • {action}")
         
         # Stats
-        print(f"\n📊 Expert Stats:")
+        print(f"\n Expert Stats:")
         stats = debug_expert.get_stats()
         for key, value in stats.items():
             print(f"  {key}: {value}")

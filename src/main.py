@@ -11,16 +11,16 @@ This is the central coordination system that:
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 import signal
 
 # Add core to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from loguru import logger
-from etw_monitor import ETWEventMonitor, SystemEvent
-from master_router import MasterRouter, ExpertType
-from experts.base_expert import DebuggingExpert, FileOperationsExpert
+from c_core.etw_monitor import ETWEventMonitor, SystemEvent
+from c_core.master_router import MasterRouter, ExpertType
+from c_core.base_expert import DebuggingExpert, FileOperationsExpert
 
 
 class AgentOS:
@@ -35,14 +35,16 @@ class AgentOS:
     def __init__(self):
         self.etw_monitor: Optional[ETWEventMonitor] = None
         self.master_router: Optional[MasterRouter] = None
-        self.experts = {}
+        self.experts: Dict[ExpertType, object] = {}  # Added type annotation
         self.is_running = False
         
         logger.info(" AgentOS initializing...")
         
         # Configure logger
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
         logger.add(
-            "logs/agent-os_{time}.log",
+            logs_dir / "agent-os_{time}.log",
             rotation="100 MB",
             retention="7 days",
             level="DEBUG"
@@ -84,7 +86,19 @@ class AgentOS:
         # Example: Auto-trigger debugging expert when crash detected
         if 'crash' in event.target.lower() or 'error' in event.target.lower():
             logger.info(" Crash/error detected - auto-triggering debugging expert")
-            asyncio.create_task(self._auto_assist_debugging(event))
+            # Use thread-safe way to schedule async task
+            try:
+                # Get or create event loop in this thread
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop in this thread, create new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Schedule the async task
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(self._auto_assist_debugging(event))
+            )
     
     async def _auto_assist_debugging(self, trigger_event: SystemEvent):
         """
@@ -104,7 +118,7 @@ class AgentOS:
             context={'auto_triggered': True}
         )
         
-        # Execute expert
+        # Execute expert - FIXED: Check if expert exists
         if decision.expert in self.experts:
             expert = self.experts[decision.expert]
             response = await expert.execute(
@@ -115,6 +129,8 @@ class AgentOS:
             
             logger.info(f" Auto-assist complete: {response.success}")
             logger.info(f"Expert response: {response.response[:200]}...")
+        else:
+            logger.warning(f"No expert available for {decision.expert.value}")
     
     async def process_user_query(self, query: str):
         """
@@ -200,7 +216,8 @@ class AgentOS:
         while self.is_running:
             try:
                 # Get user input
-                query = await asyncio.get_event_loop().run_in_executor(
+                loop = asyncio.get_event_loop()
+                query = await loop.run_in_executor(
                     None,
                     lambda: input("You: ")
                 )
@@ -224,14 +241,16 @@ class AgentOS:
                     continue
                 
                 # Process as agent query
-                await self.process_user_query(query)
+                result = await self.process_user_query(query)
+                if not result['success']:
+                    print(f"\n❌ {result['message']}\n")
             
             except KeyboardInterrupt:
                 print("\nShutting down...")
                 break
             except Exception as e:
                 logger.error(f"Error processing query: {e}")
-                print(f"❌ Error: {e}")
+                print(f" Error: {e}")
     
     def _show_stats(self):
         """Display system statistics"""
@@ -240,18 +259,24 @@ class AgentOS:
         print("="*60)
         
         # Router stats
-        router_stats = self.master_router.get_stats()
-        print("\n Master Router:")
-        for key, value in router_stats.items():
-            print(f"  • {key}: {value}")
+        if self.master_router:
+            router_stats = self.master_router.get_stats()
+            print("\n Master Router:")
+            for key, value in router_stats.items():
+                print(f"  • {key}: {value}")
+        else:
+            print("\n Master Router: Not initialized")
         
         # Expert stats
         print("\n Expert Agents:")
-        for expert_type, expert in self.experts.items():
-            stats = expert.get_stats()
-            print(f"\n  {expert_type.value}:")
-            for key, value in stats.items():
-                print(f"    • {key}: {value}")
+        if not self.experts:
+            print("  No experts loaded")
+        else:
+            for expert_type, expert in self.experts.items():
+                stats = expert.get_stats()
+                print(f"\n  {expert_type.value}:")
+                for key, value in stats.items():
+                    print(f"    • {key}: {value}")
         
         print("="*60 + "\n")
     
@@ -261,16 +286,19 @@ class AgentOS:
         print(" Recent System Events")
         print("="*60)
         
-        events = self.etw_monitor.get_recent_events(10)
-        
-        if not events:
-            print("No events recorded yet")
+        if not self.etw_monitor:
+            print("ETW Monitor not initialized")
         else:
-            for i, event in enumerate(events, 1):
-                print(f"\n{i}. {event.event_type.upper()} - {event.operation}")
-                print(f"   Target: {event.target}")
-                print(f"   Process: {event.process_name}")
-                print(f"   Time: {event.timestamp}")
+            events = self.etw_monitor.get_recent_events(10)
+            
+            if not events:
+                print("No events recorded yet")
+            else:
+                for i, event in enumerate(events, 1):
+                    print(f"\n{i}. {event.event_type.upper()} - {event.operation}")
+                    print(f"   Target: {event.target}")
+                    print(f"   Process: {event.process_name}")
+                    print(f"   Time: {event.timestamp}")
         
         print("\n" + "="*60 + "\n")
     
@@ -281,7 +309,8 @@ class AgentOS:
         self.is_running = True
         
         # Start ETW monitoring in background
-        self.etw_monitor.start()
+        if self.etw_monitor:
+            self.etw_monitor.start()
         
         logger.info(" AgentOS started successfully")
         logger.info("Monitoring system events and ready for queries")
@@ -306,18 +335,28 @@ async def main():
     # Setup signal handlers
     def signal_handler(signum, frame):
         print("\nReceived interrupt signal")
-        asyncio.create_task(agent_os.stop())
+        # Use asyncio.run_coroutine_threadsafe for thread safety
+        loop = asyncio.get_event_loop()
+        loop.call_soon_threadsafe(
+            lambda: asyncio.create_task(agent_os.stop())
+        )
     
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
-    # Start system
-    await agent_os.start()
-    
-    # Run interactive mode
-    await agent_os.run_interactive()
-    
-    # Cleanup
-    await agent_os.stop()
+    try:
+        # Start system
+        await agent_os.start()
+        
+        # Run interactive mode
+        await agent_os.run_interactive()
+        
+    except Exception as e:
+        logger.error(f"AgentOS crashed: {e}")
+        print(f"\n AgentOS crashed: {e}")
+    finally:
+        # Cleanup
+        await agent_os.stop()
 
 
 if __name__ == "__main__":
@@ -325,4 +364,9 @@ if __name__ == "__main__":
     Path("logs").mkdir(exist_ok=True)
     
     # Run
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nAgentOS shutdown complete.")
+    except Exception as e:
+        print(f"\n Fatal error: {e}")
