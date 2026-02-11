@@ -1,64 +1,37 @@
-# Makefile for project_cortex
-CC = gcc
-CFLAGS = -Wall -Wextra -O2 -std=c99 -DWINDOWS
-LDFLAGS = -luser32 -lpsapi -ladvapi32
-PYTHON_DIR = /d/miniforge
-PYTHON_CFLAGS = -I$(PYTHON_DIR)/include
-PYTHON_LIBS = -L$(PYTHON_DIR)/libs -lpython312
+.PHONY: install setup build clean test
 
-BUILD_DIR = build
-SRC_DIR = src/c_core
-INCLUDE_DIR = src/include
+install:
+    pip install -e .[dev]
 
-TARGETS = $(BUILD_DIR)/hotkey_daemon.exe \
-          $(BUILD_DIR)/system_monitor.exe \
-          $(BUILD_DIR)/py_bridge.exe
+setup:
+    @echo "Detecting OS..."
+    @if [ "$(OS)" = "Windows_NT" ]; then \
+        powershell -ExecutionPolicy Bypass -File scripts/setup_env.ps1; \
+    else \
+        chmod +x scripts/setup_env.sh && ./scripts/setup_env.sh; \
+    fi
 
-.PHONY: all clean run-hotkey run-monitor test-bridge help
-
-all: $(TARGETS)
-
-$(BUILD_DIR)/hotkey_daemon.exe: $(SRC_DIR)/hotkey_daemon.c
-	@echo "Building hotkey_daemon..."
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) $< -o $@ $(LDFLAGS)
-	@echo "  ✓ Built: $@"
-
-$(BUILD_DIR)/system_monitor.exe: $(SRC_DIR)/system_monitor.c
-	@echo "Building system_monitor..."
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) $< -o $@ $(LDFLAGS)
-	@echo "  ✓ Built: $@"
-
-$(BUILD_DIR)/py_bridge.exe: $(SRC_DIR)/py_bridge.c
-	@echo "Building py_bridge..."
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) $(PYTHON_CFLAGS) $< -o $@ $(PYTHON_LIBS) $(LDFLAGS)
-	@echo "  ✓ Built: $@"
+build:
+    python setup.py build_ext --inplace
 
 clean:
-	@echo "Cleaning build directory..."
-	rm -rf $(BUILD_DIR)
-	@echo "  ✓ Cleaned"
+    rm -rf build/
+    rm -rf dist/
+    rm -rf *.egg-info/
+    find . -type f -name "*.pyc" -delete
+    find . -type d -name "__pycache__" -delete
 
-run-hotkey: $(BUILD_DIR)/hotkey_daemon.exe
-	@echo "Running hotkey daemon (Ctrl+C to exit)..."
-	./$(BUILD_DIR)/hotkey_daemon.exe
+test:
+    python -m pytest tests/ -v
 
-run-monitor: $(BUILD_DIR)/system_monitor.exe
-	@echo "Running system monitor..."
-	./$(BUILD_DIR)/system_monitor.exe --daemon
-
-test-bridge: $(BUILD_DIR)/py_bridge.exe
-	@echo "Testing Python bridge..."
-	./$(BUILD_DIR)/py_bridge.exe "What's using my memory?"
+run:
+    python -m src.main
 
 help:
-	@echo "=== project_cortex Build Commands ==="
-	@echo "make all          - Build all executables"
-	@echo "make clean        - Remove build files"
-	@echo "make run-hotkey   - Build and run hotkey daemon"
-	@echo "make run-monitor  - Build and run system monitor"
-	@echo "make test-bridge  - Build and test Python bridge"
-	@echo "make help         - Show this help"
-EOF
+    @echo "Available commands:"
+    @echo "  make setup    - Set up development environment"
+    @echo "  make install  - Install Python dependencies"
+    @echo "  make build    - Build C extensions"
+    @echo "  make clean    - Clean build artifacts"
+    @echo "  make test     - Run tests"
+    @echo "  make run      - Run the application"
