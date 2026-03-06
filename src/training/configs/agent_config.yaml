@@ -1,0 +1,92 @@
+resource_management:
+  max_memory_mb: 4096
+  max_cpu_percent: 80.0
+  check_interval_seconds: 5
+  throttle_on_high_load: true
+  auto_checkpoint_on_signal: true
+
+cli_agent:
+  policy:
+    model_name: "Qwen/Qwen2.5-Coder-3B-Instruct"
+    max_seq_length: 1024
+    load_in_4bit: true
+
+  inference:
+    model_path: "./checkpoints/cli_agent/final"  # trained model
+    mode: "interactive"                           # interactive or benchmark
+    temperature: 0.3
+    max_steps: 15
+
+  environment:
+    max_steps_per_episode: 20
+    timeout_seconds: 30
+    allowed_commands:
+      - "ls"
+      - "cat"
+      - "grep"
+      - "find"
+      - "wc"
+      - "head"
+      - "tail"
+      - "sort"
+      - "uniq"
+      - "awk"
+      - "sed"
+      - "echo"
+      - "pwd"
+      - "cd"
+      - "mkdir"
+      - "cp"
+      - "mv"
+      - "chmod"
+      - "ps"
+      - "top"
+      - "df"
+      - "du"
+      - "free"
+    blocked_commands:
+      - "rm -rf /"
+      - "sudo"
+      - "shutdown"
+      - "reboot"
+      - "mkfs"
+      - "dd"
+
+training:
+  sft:
+    enabled: true
+    learning_rate: 2.0e-4
+    epochs: 2
+    batch_size: 2
+    warmup_steps: 5
+
+  grpo:
+    group_size: 8
+    learning_rate: 5.0e-6
+    kl_coeff: 0.05
+    temperature: 1.0
+    batch_size: 1
+    total_steps: 10000
+    warmup_ratio: 0.1
+    gradient_accumulation_steps: 4
+    weight_decay: 0.001
+    max_completion_length: 256
+    use_vllm: true
+    gpu_memory_utilization: 0.9
+
+  lora:
+    r: 32
+    alpha: 64
+    dropout: 0.05
+
+  checkpointing:
+    save_every_steps: 500
+    checkpoint_dir: "./checkpoints/cli_agent"
+
+  logging:
+    log_every_steps: 1
+    print_every_steps: 5
+
+  saving:
+    merge_on_complete: true
+    merge_format: "q4_k_m" 
