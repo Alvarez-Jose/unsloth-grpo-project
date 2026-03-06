@@ -50,9 +50,10 @@ def check_command_success(output: str, expected: str) -> float:
     """Check that the command produced any output and no errors."""
     if not output.strip():
         return 0.0
-    if "ERROR" in output or "error" in output.lower():
+    elif "[exit code" in output:  # your env already appends this
         return 0.0
-    return 1.0
+    else:
+        return 1.0
 
 
 def check_sorted_unique(output: str, expected: str) -> float:

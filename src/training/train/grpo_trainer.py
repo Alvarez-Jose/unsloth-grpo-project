@@ -276,7 +276,15 @@ class UnslothGRPOTrainer:
         logger.info("GRPO phase complete")
 
     # saving weights
-    def save(self, quantization):
+
+    def save(self, path: str):
+        """Save LoRA adapter only — fast, resumable."""
+        logger.info(f"Saving adapter checkpoint: {path}")
+        self.model.save_pretrained(path)
+        self.tokenizer.save_pretrained(path)
+        logger.info(f"Checkpoint saved: {path}")
+
+    def save_merged(self, quantization):
         """Save fully merged model for deployment."""
         save_path = f"{self.config.checkpoint_dir}/merged"
         logger.info(f"Saving merged model ({quantization}): {save_path}")

@@ -26,6 +26,7 @@ def _find_task(prompt):
 
 
 def _execute_completion(task: CLITask, completion: str) -> tuple[list[dict], str]:
+    env = CLIEnvironment(tasks=[task])
     _reward_env.reset(task)
     commands = [
         line.strip()

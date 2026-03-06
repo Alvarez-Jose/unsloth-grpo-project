@@ -4,11 +4,12 @@ resource_management:
   check_interval_seconds: 5
   throttle_on_high_load: true
   auto_checkpoint_on_signal: true
+  gpu_memory_utilization: 0.55
 
 cli_agent:
   policy:
     model_name: "Qwen/Qwen2.5-Coder-3B-Instruct"
-    max_seq_length: 1024
+    max_seq_length: 512
     load_in_4bit: true
 
   inference:
@@ -61,17 +62,17 @@ training:
     warmup_steps: 5
 
   grpo:
-    group_size: 8
+    group_size: 4
     learning_rate: 5.0e-6
     kl_coeff: 0.05
-    temperature: 1.0
+    temperature: 1.2
     batch_size: 1
     total_steps: 10000
     warmup_ratio: 0.1
     gradient_accumulation_steps: 4
     weight_decay: 0.001
     max_completion_length: 256
-    use_vllm: false
+    use_vllm: true
     gpu_memory_utilization: 0.9
 
   lora:
