@@ -1,17 +1,18 @@
-from __future__ import annotations
+import unsloth
+from unsloth import FastLanguageModel
 import json
 import time
 import subprocess
 import numpy as np
+from typing import Optional
 from pathlib import Path
 from dataclasses import dataclass, field
 import torch
-from vllm import SamplingParams 
 from datasets import Dataset
-from unsloth import FastLanguageModel
 from trl import GRPOTrainer as TRLGRPOTrainer, GRPOConfig as TRLGRPOConfig, SFTTrainer, SFTConfig
-from training.cli_agent.environment import CLIEnvironment, CLITask, TRAINING_TASKS
+from training.cli_agent.environment import CLIEnvironment, CLITask
 from training.train.rewards import reward_combined, set_tasks
+from training.train.training_data import SFT_EXAMPLES, TRAINING_TASKS
 import logging
 
 logger = logging.getLogger("training.grpo")
@@ -20,47 +21,47 @@ logger = logging.getLogger("training.grpo")
 @dataclass
 class GRPOConfig:
     # Model
-    model_name = "Qwen/Qwen2.5-Coder-3B-Instruct"
-    max_seq_length = 1024
-    load_in_4bit = True
-    lora_rank = 32
-    lora_alpha = 64
-    lora_dropout = 0.05
-    lora_target_modules = field(default_factory=lambda: [
+    model_name: str = "Qwen/Qwen2.5-Coder-3B-Instruct"
+    max_seq_length: int = 1024
+    load_in_4bit: bool = True
+    lora_rank: int = 32
+    lora_alpha: int = 64
+    lora_dropout: float = 0.05
+    lora_target_modules: list = field(default_factory=lambda: [
         "q_proj", "k_proj", "v_proj", "o_proj",
         "gate_proj", "up_proj", "down_proj",
     ])
 
     # SFT
-    sft_enabled = True
-    sft_learning_rate = 2e-4
-    sft_epochs = 2
-    sft_batch_size = 2
-    sft_warmup_steps = 5
+    sft_enabled: bool = True
+    sft_learning_rate: float = 2e-4
+    sft_epochs: int = 2
+    sft_batch_size: int = 2
+    sft_warmup_steps: int = 5
 
     # GRPO
-    temperature = 1.0    
-    learning_rate = 5e-6
-    num_generations = 8 
-    batch_size = 1
-    gradient_accumulation_steps = 4
-    total_steps = 10000
-    warmup_ratio = 0.1
-    weight_decay = 0.001
-    max_completion_length = 256
-    kl_coeff = 0.05
+    temperature: float = 1.0
+    learning_rate: float = 5e-6
+    num_generations: int = 8
+    batch_size: int = 1
+    gradient_accumulation_steps: int = 4
+    total_steps: int = 10000
+    warmup_ratio: float = 0.1
+    weight_decay: float = 0.001
+    max_completion_length: int = 256
+    kl_coeff: float = 0.05
 
     # vllm
-    use_vllm = True
-    gpu_memory_utilization = 0.9
+    use_vllm: bool = False
+    gpu_memory_utilization: float = 0.9
 
     # Saving
-    checkpoint_dir = "./checkpoints/cli_agent"
-    save_every_steps = 500
+    checkpoint_dir: str = "./checkpoints/cli_agent"
+    save_every_steps: int = 500
 
     # Logging
-    log_every_steps = 1
-    print_every_steps = 5
+    log_every_steps: int = 1
+    print_every_steps: int = 5
 
 
 
@@ -69,30 +70,6 @@ SYSTEM_PROMPT = (
     "You are a CLI expert. Given a task, output exactly the shell commands required. "
     "No explanation, no markdown, no backticks. "
 )
-
-# These are gold-standard examples for SFT
-SFT_EXAMPLES = [
-    ("Count the number of lines in /tmp/data/log.txt", "wc -l < /tmp/data/log.txt"),
-    ("List all files in the current directory", "ls -la"),
-    ("Find all .py files in /home", "find /home -name '*.py'"),
-    ("Show disk usage in human-readable format", "df -h"),
-    ("Search for the word ERROR in /var/log/syslog", "grep 'ERROR' /var/log/syslog"),
-    ("Sort /tmp/names.txt alphabetically and remove duplicates", "sort -u /tmp/names.txt"),
-    ("Show the top 5 processes by memory usage", "ps aux --sort=-%mem | head -6"),
-    ("Count how many .txt files are in /tmp", "find /tmp -name '*.txt' | wc -l"),
-    ("Display the last 20 lines of /var/log/auth.log", "tail -20 /var/log/auth.log"),
-    ("Show current memory usage", "free -m"),
-    ("Find files modified in the last 24 hours in /tmp", "find /tmp -mtime -1"),
-    ("Extract the second column from a space-separated file", "awk '{print $2}' /tmp/data.txt"),
-    ("Create directories src, tests, and docs under /tmp/project", "mkdir -p /tmp/project/{src,tests,docs}"),
-    ("Sum all numbers in /tmp/numbers.txt", "awk '{s+=$1} END {print s}' /tmp/numbers.txt"),
-    ("Show the 10 largest files in /tmp", "du -ah /tmp | sort -rh | head -10"),
-    ("Check which process is using port 8080", "lsof -i :8080"),
-    ("Find all empty files in /tmp", "find /tmp -empty -type f"),
-    ("Replace all occurrences of foo with bar in /tmp/config.txt", "sed -i 's/foo/bar/g' /tmp/config.txt"),
-    ("Show environment variables containing PATH", "env | grep PATH"),
-    ("Compress /tmp/logs into a tar.gz archive", "tar -czf /tmp/logs.tar.gz /tmp/logs"),
-]
 
 # SFT data
 def build_sft_dataset(tokenizer, max_seq_length):
@@ -255,6 +232,7 @@ class UnslothGRPOTrainer:
         # vLLM sampling params
         grpo_kwargs = {}
         if self.config.use_vllm:
+            from vllm import SamplingParams
             grpo_kwargs["vllm_sampling_params"] = SamplingParams(
                 min_p=0.1,
                 top_p=1.0,
@@ -289,7 +267,7 @@ class UnslothGRPOTrainer:
         trainer = TRLGRPOTrainer(
             model=self.model,
             processing_class=self.tokenizer,
-            reward_funcs=reward_combined,
+            reward_funcs=[reward_combined],
             args=training_args,
             train_dataset=dataset,
         )

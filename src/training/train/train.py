@@ -1,10 +1,10 @@
-from __future__ import annotations
+import unsloth
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from training.cli_agent.environment import TRAINING_TASKS
 from training.train.grpo_trainer import UnslothGRPOTrainer, GRPOConfig
 from training.utils import load_config, setup_logging
+from training.train.training_data import TRAINING_TASKS
 
 logger = setup_logging("training")
 
@@ -65,8 +65,6 @@ def main():
         tasks=TRAINING_TASKS,
     )
 
-    print("ready to train")
-    '''
     try:
         trainer.train()
     except KeyboardInterrupt:
@@ -85,7 +83,7 @@ def main():
         )
 
     logger.info("Done")
-    '''
+    
 
 
 if __name__ == "__main__":

@@ -71,7 +71,7 @@ training:
     gradient_accumulation_steps: 4
     weight_decay: 0.001
     max_completion_length: 256
-    use_vllm: true
+    use_vllm: false
     gpu_memory_utilization: 0.9
 
   lora:

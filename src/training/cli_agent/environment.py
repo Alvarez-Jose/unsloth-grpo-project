@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
 
+
 """
 
 I had claude generate this but IDK what is going on here lmao
@@ -37,122 +38,6 @@ class CLITask:
     max_steps: int = 10
     tags: list[str] = field(default_factory=list)
 
-
-# Pre-built task set for training
-TRAINING_TASKS = [
-    CLITask(
-        task_id="count_lines",
-        description="Count the number of lines in /tmp/testdata/log.txt",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            "seq 1 42 > /tmp/testdata/log.txt",
-        ],
-        validation_fn="check_output_contains",
-        expected_output="42",
-        tags=["basic", "file_ops"],
-    ),
-    CLITask(
-        task_id="find_largest_file",
-        description="Find the name of the largest file in /tmp/testdata/files/",
-        setup_commands=[
-            "mkdir -p /tmp/testdata/files",
-            "dd if=/dev/zero of=/tmp/testdata/files/small.bin bs=1K count=1 2>/dev/null",
-            "dd if=/dev/zero of=/tmp/testdata/files/medium.bin bs=1K count=10 2>/dev/null",
-            "dd if=/dev/zero of=/tmp/testdata/files/large.bin bs=1K count=100 2>/dev/null",
-        ],
-        validation_fn="check_output_contains",
-        expected_output="large.bin",
-        tags=["basic", "file_ops"],
-    ),
-    CLITask(
-        task_id="grep_pattern",
-        description="Find all lines containing 'ERROR' in /tmp/testdata/app.log and count them",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            (
-                'printf "INFO start\\nERROR disk full\\nINFO running\\n'
-                'ERROR timeout\\nERROR conn refused\\nINFO done\\n" '
-                "> /tmp/testdata/app.log"
-            ),
-        ],
-        validation_fn="check_output_contains",
-        expected_output="3",
-        tags=["basic", "text_processing"],
-    ),
-    CLITask(
-        task_id="sort_and_unique",
-        description="Read /tmp/testdata/names.txt, sort alphabetically, remove duplicates, and show the result",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            'printf "charlie\\nalice\\nbob\\nalice\\ncharlie\\ndave\\n" > /tmp/testdata/names.txt',
-        ],
-        validation_fn="check_sorted_unique",
-        expected_output="alice\nbob\ncharlie\ndave",
-        tags=["intermediate", "text_processing"],
-    ),
-    CLITask(
-        task_id="disk_usage",
-        description="Show the total disk usage of /tmp/testdata in human-readable format",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            "dd if=/dev/zero of=/tmp/testdata/blob.bin bs=1M count=5 2>/dev/null",
-        ],
-        validation_fn="check_command_success",
-        expected_output="",
-        tags=["basic", "system"],
-    ),
-    CLITask(
-        task_id="extract_column",
-        description="Extract the second column (space-separated) from /tmp/testdata/data.txt",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            'printf "a 100\\nb 200\\nc 300\\n" > /tmp/testdata/data.txt',
-        ],
-        validation_fn="check_output_contains",
-        expected_output="100\n200\n300",
-        tags=["intermediate", "text_processing"],
-    ),
-    CLITask(
-        task_id="process_monitor",
-        description="List the top 5 processes by memory usage, showing PID, %MEM, and command name",
-        setup_commands=[],
-        validation_fn="check_command_success",
-        expected_output="",
-        tags=["intermediate", "system"],
-    ),
-    CLITask(
-        task_id="find_recent_files",
-        description="Find all .txt files in /tmp/testdata modified in the last 1 day",
-        setup_commands=[
-            "mkdir -p /tmp/testdata/sub",
-            "touch /tmp/testdata/recent.txt",
-            "touch /tmp/testdata/sub/also_recent.txt",
-            "touch -t 202001010000 /tmp/testdata/old.txt",
-        ],
-        validation_fn="check_output_contains",
-        expected_output="recent.txt",
-        tags=["intermediate", "file_ops"],
-    ),
-    CLITask(
-        task_id="create_directory_structure",
-        description="Create the directory structure /tmp/project/{src,tests,docs} with an empty __init__.py in src/ and tests/",
-        setup_commands=["rm -rf /tmp/project"],
-        validation_fn="check_directory_structure",
-        expected_output="/tmp/project/src/__init__.py,/tmp/project/tests/__init__.py",
-        tags=["intermediate", "file_ops"],
-    ),
-    CLITask(
-        task_id="sum_numbers",
-        description="Calculate the sum of all numbers in /tmp/testdata/numbers.txt (one number per line)",
-        setup_commands=[
-            "mkdir -p /tmp/testdata",
-            'printf "10\\n20\\n30\\n40\\n" > /tmp/testdata/numbers.txt',
-        ],
-        validation_fn="check_output_contains",
-        expected_output="100",
-        tags=["intermediate", "text_processing"],
-    ),
-]
 
 
 # Validation Functions
@@ -227,7 +112,7 @@ class CLIEnvironment:
         max_steps: int = 20,
         work_dir: Optional[str] = None,
     ):
-        self.tasks = tasks or TRAINING_TASKS
+        self.tasks = tasks
         self.timeout = timeout
         self.default_max_steps = max_steps
         self.work_dir = work_dir or tempfile.mkdtemp(prefix="cli_env_")

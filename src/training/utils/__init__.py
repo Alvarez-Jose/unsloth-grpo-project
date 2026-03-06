@@ -6,8 +6,11 @@ from typing import Any
 
 
 def load_config(path: str = "configs/agent_config.yaml") -> dict:
-    """Load YAML configuration."""
-    with open(path, "r") as f:
+    p = Path(path)
+    if not p.is_absolute() and not p.exists():
+        training_root = Path(__file__).parent.parent  # utils/ → training/
+        p = training_root / path
+    with open(p, "r") as f:
         return yaml.safe_load(f)
 
 

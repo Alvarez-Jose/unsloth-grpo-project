@@ -1,8 +1,7 @@
-from __future__ import annotations
 import re
 import shlex
-from training.cli_agent.environment import CLIEnvironment, CLITask, TRAINING_TASKS
-
+from training.cli_agent.environment import CLIEnvironment, CLITask
+from training.train.training_data import TRAINING_TASKS
 
 _reward_env = CLIEnvironment(tasks=TRAINING_TASKS)
 _task_list: list[CLITask] = list(TRAINING_TASKS)
@@ -10,14 +9,12 @@ _print_counter = 0
 
 
 def set_tasks(tasks: list[CLITask]):
-    """Update the task list and environment."""
     global _task_list, _reward_env
     _task_list = list(tasks)
     _reward_env = CLIEnvironment(tasks=tasks)
 
 
 def _find_task(prompt):
-    """Match a prompt back to its task."""
     if isinstance(prompt, list):
         text = " ".join(m["content"] for m in prompt if isinstance(m, dict))
     else:
@@ -29,14 +26,12 @@ def _find_task(prompt):
 
 
 def _execute_completion(task: CLITask, completion: str) -> tuple[list[dict], str]:
-    """Run a completions commands in the environment."""
     _reward_env.reset(task)
     commands = [
         line.strip()
         for line in completion.strip().split("\n")
         if line.strip() and not line.strip().startswith("#")
     ]
-
     history = []
     for cmd in commands[:task.max_steps]:
         if cmd.upper() == "DONE":
@@ -45,24 +40,34 @@ def _execute_completion(task: CLITask, completion: str) -> tuple[list[dict], str
         history.append({"command": cmd, "output": result.observation})
         if result.done:
             break
-
     last_output = history[-1]["output"] if history else ""
     return history, last_output
 
 
 def _get_response(completion) -> str:
-    """Extract text from the completion format."""
     if isinstance(completion, list):
         return completion[0]["content"]
     return completion
 
 
-# Reward functions
+# --- Reward Functions ---
+
 def reward_format(prompts, completions, **kwargs) -> list[float]:
-    """Reward well-formed shell commands. +2.0 if parseable, -1.5 if not."""
+    """
+    Reward well-formed shell commands.
+    +2.0 if all lines are parseable shell.
+    -2.0 if markdown formatting detected.
+    -1.0 per unparseable line.
+    """
     scores = []
     for completion in completions:
         response = _get_response(completion)
+
+        # Penalize markdown formatting
+        if "```" in response or response.strip().startswith("`"):
+            scores.append(-2.0)
+            continue
+
         lines = [l.strip() for l in response.strip().split("\n") if l.strip()]
 
         if not lines:
@@ -83,8 +88,11 @@ def reward_format(prompts, completions, **kwargs) -> list[float]:
     return scores
 
 
-def reward_safety(prompts, completions, **kwargs):
-    """Penalize dangerous commands. 0.0 if safe, up to -5.0 if dangerous."""
+def reward_safety(prompts, completions, **kwargs) -> list[float]:
+    """
+    Penalize dangerous commands.
+    0.0 if safe, up to -5.0 if dangerous.
+    """
     DANGEROUS = [
         r"rm\s+-rf\s+/",
         r"rm\s+-rf\s+\*",
@@ -98,7 +106,6 @@ def reward_safety(prompts, completions, **kwargs):
         r"curl.*\|\s*sh",
         r"wget.*\|\s*sh",
     ]
-
     scores = []
     for completion in completions:
         response = _get_response(completion)
@@ -110,10 +117,15 @@ def reward_safety(prompts, completions, **kwargs):
     return scores
 
 
-def reward_correctness(prompts, completions, answer, **kwargs):
-    """Execute the command and check if output matches expected answer.
+def reward_correctness(prompts, completions, answer, **kwargs) -> list[float]:
+    """
+    Execute the command and check output against expected answer.
 
-    +5.0 for exact match, +2.0 for partial, -2.0 for wrong.
+    +5.0 exact match
+    +2.0 case-insensitive match
+    +1.0 no expected output required, command succeeded cleanly
+    +0.5 wrong answer but non-empty output with no errors (partial credit)
+    -2.0 wrong, empty, or errored
     """
     global _print_counter
     scores = []
@@ -132,16 +144,24 @@ def reward_correctness(prompts, completions, answer, **kwargs):
             scores.append(-2.0)
             continue
 
+        has_errors = (
+            "[stderr]" in last_output and "No such file" not in last_output
+        ) or "[exit code" in last_output
+
         if expected and expected.strip() in last_output.strip():
             score = 5.0
         elif expected and expected.strip().lower() in last_output.strip().lower():
             score = 2.0
+        elif not expected and last_output.strip() and not has_errors:
+            score = 1.0
+        elif last_output.strip() and not has_errors:
+            score = 0.5
         else:
             score = -2.0
 
         if _print_counter % 5 == 0:
             print(
-                f"{'*'*20}\n"
+                f"{'*' * 20}\n"
                 f"Task: {task.description}\n"
                 f"Expected: {expected}\n"
                 f"Command: {response}\n"
@@ -149,37 +169,92 @@ def reward_correctness(prompts, completions, answer, **kwargs):
                 f"Score: {score}\n"
             )
         _print_counter += 1
-
         scores.append(score)
     return scores
 
 
-def reward_efficiency(prompts, completions, **kwargs):
-    """Reward concise solutions. +1.5 for single command, less for more."""
+def reward_efficiency(prompts, completions, **kwargs) -> list[float]:
+    """
+    Reward concise solutions, penalize hardcoded answers.
+
+    -1.5 for bare echo/printf hardcoding (anti-memorization)
+    +1.5 for a single real command
+    +0.5 for 2 commands
+     0.0 for 3 commands
+    -0.3 for 4+ commands
+    """
     scores = []
     for completion in completions:
         response = _get_response(completion)
         lines = [l.strip() for l in response.strip().split("\n") if l.strip()]
-        num_commands = len(lines)
 
-        if num_commands == 0:
+        if not lines:
             scores.append(-1.0)
-        elif num_commands == 1:
+            continue
+
+        # Penalize trivial hardcoded answers like "echo 42" or "printf 100"
+        if len(lines) == 1 and re.match(r'^(echo|printf)\s+[\d\w\s"\']+$', lines[0]):
+            scores.append(-1.5)
+            continue
+
+        if len(lines) == 1:
             scores.append(1.5)
-        elif num_commands == 2:
+        elif len(lines) == 2:
             scores.append(0.5)
+        elif len(lines) == 3:
+            scores.append(0.0)
         else:
-            scores.append(-0.5)
+            scores.append(-0.3)
+
     return scores
 
-def reward_combined(prompts, completions, **kwargs):
-    """
-    Single reward function that combines all components.
 
+def reward_tool_appropriateness(prompts, completions, **kwargs) -> list[float]:
     """
-    fmt_scores = reward_format(prompts, completions, **kwargs)
-    safety_scores = reward_safety(prompts, completions, **kwargs)
-    correct_scores = reward_correctness(prompts, completions, **kwargs)
-    eff_scores = reward_efficiency(prompts, completions, **kwargs)
+    Small bonus (+0.5 max) for using canonical tools for the job.
+    Never penalizes — only adds signal.
+    """
+    TASK_TOOL_HINTS = {
+        "count": ["wc", "grep -c", "awk"],
+        "lines": ["wc", "grep", "awk", "sed"],
+        "find": ["find"],
+        "search": ["grep"],
+        "sort": ["sort"],
+        "extract column": ["awk", "cut"],
+        "sum": ["awk", "bc"],
+        "average": ["awk"],
+        "compress": ["tar", "gzip", "zip"],
+        "extract": ["tar", "unzip", "gunzip"],
+        "replace": ["sed"],
+        "duplicate": ["sort", "uniq"],
+        "permission": ["chmod", "find"],
+        "process": ["ps", "pgrep", "top"],
+        "disk": ["df", "du"],
+        "memory": ["free"],
+        "unique": ["sort", "uniq", "awk"],
+    }
+    scores = []
+    for prompt, completion in zip(prompts, completions):
+        response = _get_response(completion)
+        task_text = " ".join(
+            m["content"] for m in prompt if isinstance(m, dict)
+        ).lower()
+        score = 0.0
+        for keyword, tools in TASK_TOOL_HINTS.items():
+            if keyword in task_text:
+                if any(tool in response for tool in tools):
+                    score = 0.5
+                break
+        scores.append(score)
+    return scores
 
-    return [f + s + c + e for f, s, c, e in zip(fmt_scores, safety_scores, correct_scores, eff_scores)]
+
+def reward_combined(prompts, completions, **kwargs) -> list[float]:
+    """Combine all reward components."""
+    fmt = reward_format(prompts, completions, **kwargs)
+    safety = reward_safety(prompts, completions, **kwargs)
+    correct = reward_correctness(prompts, completions, **kwargs)
+    eff = reward_efficiency(prompts, completions, **kwargs)
+    tool = reward_tool_appropriateness(prompts, completions, **kwargs)
+
+    return [f + s + c + e + t for f, s, c, e, t in zip(fmt, safety, correct, eff, tool)]
