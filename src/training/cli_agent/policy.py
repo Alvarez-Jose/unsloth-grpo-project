@@ -155,6 +155,8 @@ class CLIPolicy(nn.Module):
 
         current_ids = input_ids
 
+        self.model.eval()
+
         for _ in range(max_new_tokens):
             outputs = self.model(current_ids)
             next_logits = outputs.logits[:, -1, :] / temperature
@@ -183,7 +185,8 @@ class CLIPolicy(nn.Module):
             if "\n" in decoded_so_far:
                 break
 
-            current_ids = torch.cat([current_ids, next_token.unsqueeze(0)], dim=1)
+            next_token = next_token.unsqueeze(-1)
+            current_ids = torch.cat([current_ids, next_token], dim=1)
 
         # Decode the command
         if generated_ids:

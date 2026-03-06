@@ -1,6 +1,9 @@
 import unsloth
 import sys
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import unsloth
+import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from training.train.grpo_trainer import UnslothGRPOTrainer, GRPOConfig
 from training.utils import load_config, setup_logging
@@ -48,7 +51,7 @@ def main():
         kl_coeff=train_cfg.get("kl_coeff", 0.05),
 
         # vLLM
-        use_vllm=train_cfg.get("use_vllm", True),
+        use_vllm=train_cfg.get("use_vllm", False),
         gpu_memory_utilization=train_cfg.get("gpu_memory_utilization", 0.9),
 
         # Saving
@@ -65,6 +68,9 @@ def main():
         tasks=TRAINING_TASKS,
     )
 
+    print(trainer.model.print_trainable_parameters())
+
+    
     try:
         trainer.train()
     except KeyboardInterrupt:
@@ -73,16 +79,17 @@ def main():
         logger.info("Checkpoint saved.")
         return
 
-    # Save final model
-    trainer.save()
+    # After successful training — also just the adapter
+    trainer.model.save_pretrained(f"{grpo_config.checkpoint_dir}/final")
+    trainer.tokenizer.save_pretrained(f"{grpo_config.checkpoint_dir}/final")
 
-    # Save merged if configured
+    # Only at the very end if you want to deploy
     if save_cfg.get("merge_on_complete", False):
-        trainer.save_merged(
-            quantization=save_cfg.get("merge_format", "q4_k_m")
-        )
+        trainer.save_merged(quantization=save_cfg.get("merge_format", "q4_k_m"))
+
 
     logger.info("Done")
+    
     
 
 

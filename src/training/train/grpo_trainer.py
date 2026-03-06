@@ -276,7 +276,7 @@ class UnslothGRPOTrainer:
         logger.info("GRPO phase complete")
 
     # saving weights
-    def save_merged(self, quantization):
+    def save(self, quantization):
         """Save fully merged model for deployment."""
         save_path = f"{self.config.checkpoint_dir}/merged"
         logger.info(f"Saving merged model ({quantization}): {save_path}")
