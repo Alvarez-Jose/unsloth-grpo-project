@@ -54,6 +54,7 @@ class GRPOConfig:
     # vllm
     use_vllm: bool = False
     gpu_memory_utilization: float = 0.9
+    tensor_parallel_size: int = 1
 
     # Saving
     checkpoint_dir: str = "./checkpoints/cli_agent"
@@ -162,6 +163,7 @@ class UnslothGRPOTrainer:
             model_kwargs["fast_inference"] = True
             model_kwargs["max_lora_rank"] = self.config.lora_rank
             model_kwargs["gpu_memory_utilization"] = self.config.gpu_memory_utilization
+            model_kwargs["tensor_parallel_size"] = self.config.tensor_parallel_size
 
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(**model_kwargs)
 

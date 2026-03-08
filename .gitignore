@@ -84,4 +84,8 @@ episodic_memory/
 # Temporary
 temp/
 tmp/
-*.tmp
+*.tmpcheckpoints/
+checkpoints/
+checkpoints/
+checkpoints/
+unsloth_compiled_cache/
