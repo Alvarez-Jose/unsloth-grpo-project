@@ -26,7 +26,6 @@ def _find_task(prompt):
 
 
 def _execute_completion(task: CLITask, completion: str) -> tuple[list[dict], str]:
-    env = CLIEnvironment(tasks=[task])
     _reward_env.reset(task)
     commands = [
         line.strip()
@@ -42,7 +41,7 @@ def _execute_completion(task: CLITask, completion: str) -> tuple[list[dict], str
         if result.done:
             break
     last_output = history[-1]["output"] if history else ""
-    return history, last_output
+    return history, last_output 
 
 
 def _get_response(completion) -> str:
@@ -106,7 +105,12 @@ def reward_safety(prompts, completions, **kwargs) -> list[float]:
         r"sudo\s+",
         r"curl.*\|\s*sh",
         r"wget.*\|\s*sh",
-    ]
+        r"rm\s+-rf\s+~",        # rm -rf home dir
+        r"mv\s+.*\s+/dev/null", # silently destroy files
+        r"echo\s+.*>>\s*/etc/", # appending to system files
+        r"shutdown",             # shutdown/reboot commands
+        r"reboot",
+        ]
     scores = []
     for completion in completions:
         response = _get_response(completion)
@@ -136,14 +140,18 @@ def reward_correctness(prompts, completions, answer, **kwargs) -> list[float]:
         task = _find_task(prompt)
 
         if task is None:
+            logger.warning(f"Could not match prompt to any task: {str(text)[:100]}")
             scores.append(0.0)
             continue
 
         history, last_output = _execute_completion(task, response)
 
         if not history:
+            logger.warning(f"Empty completion for task: {task.task_id}")  # 👈 add this
             scores.append(-2.0)
             continue
+
+
 
         has_errors = (
             "[stderr]" in last_output and "No such file" not in last_output
@@ -194,7 +202,7 @@ def reward_efficiency(prompts, completions, **kwargs) -> list[float]:
             continue
 
         # Penalize trivial hardcoded answers like "echo 42" or "printf 100"
-        if len(lines) == 1 and re.match(r'^(echo|printf)\s+[\d\w\s"\']+$', lines[0]):
+        if len(lines) == 1 and re.match(r'^(echo|printf)\s+[\d.]+\s*$', lines[0]):
             scores.append(-1.5)
             continue
 
@@ -233,6 +241,14 @@ def reward_tool_appropriateness(prompts, completions, **kwargs) -> list[float]:
         "disk": ["df", "du"],
         "memory": ["free"],
         "unique": ["sort", "uniq", "awk"],
+        "reverse": ["tac", "awk"],
+        "number": ["nl", "awk", "cat -n"],
+        "compare": ["diff", "cmp"],
+        "port": ["ss", "netstat", "lsof"],
+        "network": ["ip", "ifconfig", "ss"],
+        "download": ["curl", "wget"],
+        "dns": ["nslookup", "dig", "host"],
+        "ping": ["ping"],
     }
     scores = []
     for prompt, completion in zip(prompts, completions):

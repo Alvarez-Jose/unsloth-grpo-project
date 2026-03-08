@@ -47,14 +47,11 @@ def check_output_contains(output: str, expected: str) -> float:
 
 
 def check_command_success(output: str, expected: str) -> float:
-    """Check that the command produced any output and no errors."""
     if not output.strip():
         return 0.0
-    elif "[exit code" in output:  # your env already appends this
+    if "[stderr]" in output or "[exit code" in output:  # ✅ check actual failure signals
         return 0.0
-    else:
-        return 1.0
-
+    return 1.0
 
 def check_sorted_unique(output: str, expected: str) -> float:
     """Check that output is sorted and deduplicated correctly."""
@@ -104,7 +101,11 @@ class CLIEnvironment:
     5. The episode ends when the agent says "DONE", hits max steps, or times out.
     """
 
-    BLOCKED = {"rm -rf /", "sudo", "shutdown", "reboot", "mkfs", "dd if=/dev"}
+    BLOCKED = {
+    "rm -rf /", "sudo", "shutdown", "reboot", "mkfs", "dd if=/dev",
+    "curl | sh", "wget | sh",   
+    "| bash", "| sh",          
+}
 
     def __init__(
         self,
@@ -129,7 +130,13 @@ class CLIEnvironment:
 
         Returns the initial observation (task description).
         """
+        import shutil
+        if os.path.exists(self.work_dir):
+            shutil.rmtree(self.work_dir)
+            Path(self.work_dir).mkdir(parents=True, exist_ok=True)
+        
         import random
+
         self.current_task = task or random.choice(self.tasks)
         self.history = []
         self.steps_taken = 0
@@ -137,7 +144,7 @@ class CLIEnvironment:
 
         # Run setup commands
         for cmd in self.current_task.setup_commands:
-            subprocess.run(cmd, shell=True, capture_output=True, timeout=10)
+            subprocess.run(cmd, shell=True, capture_output=True, timeout=30)
 
         observation = (
             f"TASK: {self.current_task.description}\n"
@@ -216,24 +223,10 @@ class CLIEnvironment:
         )
 
     def _compute_final_reward(self):
-        """Compute the task-completion reward."""
+        """Kept minimal — GRPO rewards are handled externally by rewards.py"""
         if not self.current_task or not self.history:
             return 0.0
-
-        validator = VALIDATORS.get(self.current_task.validation_fn)
-        if not validator:
-            return 0.0
-
-        # Use the last command's output for validation
-        last_output = self.history[-1]["output"] if self.history else ""
-        correctness = validator(last_output, self.current_task.expected_output)
-
-        # Efficiency bonus: fewer steps = better
-        max_steps = self.current_task.max_steps
-        steps_used = self.steps_taken
-        efficiency = max(0.0, 1.0 - (steps_used / max_steps))
-
-        return correctness + 0.3 * efficiency
+        return 0.0  # let rewards.py handle scoring entirely
 
     def get_prompt(self):
         """Build the full prompt for the policy (task + history).

@@ -75,18 +75,18 @@ def main():
         trainer.train()
     except KeyboardInterrupt:
         logger.info("Training interrupted — saving checkpoint...")
-        trainer.save(f"{grpo_config.checkpoint_dir}/interrupted")
+        trainer.model.save_pretrained(f"{grpo_config.checkpoint_dir}/interrupted")  # 👈
+        trainer.tokenizer.save_pretrained(f"{grpo_config.checkpoint_dir}/interrupted")  # 👈
         logger.info("Checkpoint saved.")
         return
 
-    # After successful training
-    trainer.save(f"{grpo_config.checkpoint_dir}/final")
+    # After successful training — also just the adapter
+    trainer.model.save_pretrained(f"{grpo_config.checkpoint_dir}/final")
+    trainer.tokenizer.save_pretrained(f"{grpo_config.checkpoint_dir}/final")
 
-    # Only at the very end for deployment
+    # Only at the very end if you want to deploy
     if save_cfg.get("merge_on_complete", False):
-        trainer.save_merged(
-            quantization=save_cfg.get("merge_format", "q4_k_m")
-        )
+        trainer.save_merged(quantization=save_cfg.get("merge_format", "q4_k_m"))
 
 
     logger.info("Done")

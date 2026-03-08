@@ -54,7 +54,6 @@ class GRPOConfig:
     # vllm
     use_vllm: bool = False
     gpu_memory_utilization: float = 0.9
-    tensor_parallel_size: int = 1
 
     # Saving
     checkpoint_dir: str = "./checkpoints/cli_agent"
@@ -131,8 +130,8 @@ def build_grpo_dataset(tasks: list[CLITask], tokenizer, max_prompt_length):
         batched=True,
     )
     tokenized = tokenized.map(lambda x: {"L": len(x["tokens"])})
-    dataset = dataset.select(
-        np.where(np.array(tokenized["L"]) <= max_prompt_length)[0]
+    dataset = dataset.shuffle(seed=3407).select(
+    np.where(np.array(tokenized["L"]) <= max_prompt_length)[0]
     )
 
     logger.info(f"GRPO dataset: {len(dataset)} prompts from {len(tasks)} tasks")
@@ -163,7 +162,6 @@ class UnslothGRPOTrainer:
             model_kwargs["fast_inference"] = True
             model_kwargs["max_lora_rank"] = self.config.lora_rank
             model_kwargs["gpu_memory_utilization"] = self.config.gpu_memory_utilization
-            model_kwargs["tensor_parallel_size"] = self.config.tensor_parallel_size
 
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(**model_kwargs)
 
@@ -264,6 +262,7 @@ class UnslothGRPOTrainer:
             output_dir=self.config.checkpoint_dir,
             remove_unused_columns=False,
             beta=self.config.kl_coeff,
+            logging_steps=self.config.print_every_steps,# replace the hardcoded log_every_steps
         )
 
         trainer = TRLGRPOTrainer(
@@ -278,15 +277,7 @@ class UnslothGRPOTrainer:
         logger.info("GRPO phase complete")
 
     # saving weights
-
-    def save(self, path: str):
-        """Save LoRA adapter only — fast, resumable."""
-        logger.info(f"Saving adapter checkpoint: {path}")
-        self.model.save_pretrained(path)
-        self.tokenizer.save_pretrained(path)
-        logger.info(f"Checkpoint saved: {path}")
-
-    def save_merged(self, quantization):
+    def save(self, quantization):
         """Save fully merged model for deployment."""
         save_path = f"{self.config.checkpoint_dir}/merged"
         logger.info(f"Saving merged model ({quantization}): {save_path}")

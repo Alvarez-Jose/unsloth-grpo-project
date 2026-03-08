@@ -19,7 +19,8 @@ class SimpleAIGUI:
         
         # Header
         header = tk.Label(
-            self.root,
+            self.roo
+
             text="🤖 AI Assistant",
             font=("Arial", 20, "bold"),
             bg='#2c3e50',
