@@ -41,6 +41,12 @@ tok = AutoTokenizer.from_pretrained(base)
 model = PeftModel.from_pretrained(model, "jalva182/cli-agent-model")
 ```
 
+## Where these adapters run
+
+The runtime that consumes these adapters is published at [**`Alvarez-Jose/multi-agent-cli-bridge`**](https://github.com/Alvarez-Jose/multi-agent-cli-bridge) — a portfolio extraction of the C runtime, Python ↔ C bridge, Tkinter GUIs, and agent routing layer I authored as part of the broader (team-private) `Visualtaggy/project_cortex` multi-agent desktop assistant project.
+
+**This repo trained the adapters; that repo runs them.**
+
 ## Why GRPO
 
 GRPO drops the value model from PPO and instead computes advantages from group-relative rewards. That's significantly cheaper — both in memory and in compute — than PPO with a separate critic, which makes it tractable on commodity hardware. This repo is my hands-on study of *what actually changes* when you train this way: reward stability, mode collapse, and the effect of group size.
