@@ -1,6 +1,6 @@
 # unsloth-grpo-project
 
-> Extending [@Carson1829](https://github.com/Carson1829)'s GRPO training section with my own testing, infrastructure, and trained model artifacts on Hugging Face. GRPO fine-tuning of Llama-3-8B via [Unsloth](https://github.com/unslothai/unsloth) + [TRL](https://github.com/huggingface/trl).
+> Extending the GRPO training section with my own testing, infrastructure, and trained model artifacts on Hugging Face. GRPO fine-tuning of Llama-3-8B via [Unsloth](https://github.com/unslothai/unsloth) + [TRL](https://github.com/huggingface/trl).
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
@@ -10,7 +10,7 @@
 
 ## Origin and credit
 
-This repository is the **GRPO training portion** that I split out and extended from a larger team project. The core GRPO training scaffolding was authored by my teammate **[@Carson1829](https://github.com/Carson1829)**; I forked that section to do my own testing, infrastructure work, and produce trained model artifacts.
+This repository is the **GRPO training portion** that I split out and extended from a larger team project. I forked that section to do my own testing, infrastructure work, and produce trained model artifacts.
 
 The wider multi-agent desktop assistant this fed into lives in a private team repository (`Visualtaggy/project_cortex`).
 
@@ -73,4 +73,3 @@ MIT — see [`LICENSE`](LICENSE).
 ---
 
 **Author:** Antonio Alvarez Maciel · M.S. NLP, UC Santa Cruz · [LinkedIn](https://linkedin.com/in/jose-alvarez-maciel) · [Email](mailto:jalva182@ucsc.edu)
-**Credit:** Original GRPO training scaffolding by [@Carson1829](https://github.com/Carson1829). This repo extends that work.
